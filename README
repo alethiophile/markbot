@@ -1,0 +1,2 @@
+A Markov chain library, and an IRC bot that uses it. For usage help, run with
+--help. Requires Python lmdb and irclib. Runs on py3k.
