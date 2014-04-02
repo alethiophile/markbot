@@ -1,8 +1,7 @@
-#!/usr/bin/python
-# coding=UTF-8
+#!/usr/bin/python3
 
 import random, re, sys
-from collections import Counter
+import lmdb
 
 toks = [] # global token deduplicator
 
@@ -15,6 +14,17 @@ def dedup(tok):
         return tok
     else:
         return toks[n]
+
+class PersistentDict(object):
+    """A dictionary, made persistent via lmdb. Since lmdb uses memory-mapped files,
+    also reduces memory load of large dicts. Supports only limited numbers of
+    objects as keys/values, since lmdb requires only strings.
+
+    """
+    def __init__(self, env, db):
+        self.env = env
+        self.db = db
+        
 
 class MarkovGenerator:
     def __init__(self, clen=3):
@@ -31,7 +41,7 @@ class MarkovGenerator:
     def ntuples(self, ilist):
         if len(ilist) < self.clen:
             raise Exception("Not enough data")
-        for i in xrange(len(ilist)-self.clen+1):
+        for i in range(len(ilist)-self.clen+1):
             r = tuple([dedup(n) for n in ilist[i:i+self.clen]])
             yield r
 
@@ -60,7 +70,7 @@ class MarkovGenerator:
         if n < self.clen:
             raise Exception("Not long enough")
         if istate == None:
-            state = random.choice(self.db.keys())
+            state = random.choice(list(self.db.keys()))
         else:
             state = istate
         for i in state:

@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 # A bot that does Markov-chain training on everything it hears, then spits out
 # lines on command. Maintains separate chains for each channel it joins and each
@@ -6,8 +6,13 @@
 
 import markov
 import re, sys, signal, os
-import cPickle as pickle
+#import cPickle as pickle
+import pickle
 from irc.bot import SingleServerIRCBot
+
+from ffmirror import ffnet
+from io import StringIO
+from html2text import html2text
 
 # Utility functions for chains.
 def say_from(chain, l=250):
@@ -80,6 +85,23 @@ def readlogs(fn):
                 msg = "a" + msg
         yield (who, msg)
 
+def read_from_file(fn):
+    with open(fn) as f:
+        for i in f:
+            yield (None, i)
+
+def read_from_fic(url):
+    n = ffnet.story_url_re.match(url).group('number')
+    md, toc = ffnet.download_metadata(n)
+    yield md['title'].replace(" ", "")
+    o = StringIO()
+    ffnet.compile_story(md, toc, o)
+    v = o.getvalue()
+    v = html2text(v)
+    v = ' '.join(v.split())
+    for i in v.split('. '):
+        yield (None, "v" + i + ".")
+
 def fold_string_indiscriminately(s, n=80):
     """Folds a string (insert line-breaks where appropriate, to format
     on a display of no more than n columns) indiscriminately, meaning
@@ -151,8 +173,14 @@ class MarkovBot(SingleServerIRCBot):
             self.load_db(l[1])
         elif l[0] == 'logs':
             self.send_to(rnick, "Training logs (file {}, channel {})".format(l[2], l[1]))
-            self.train_logs(l[2], l[1])
+            self.train_from_maker(readlogs(l[2]), l[1])
             self.send_to(rnick, "Done")
+        elif l[0] == 'fic':
+            self.send_to(rnick, "Training fic {}".format(l[1]))
+            self.train_from_maker(read_from_fic(l[1]), l[2])
+        elif l[0] == 'file':
+            self.send_to(rnick, "Training chain {} from file {}".format(l[2], l[1]))
+            self.train_from_maker(read_from_file(l[1]), l[2])
         elif l[0] == 'join':
             self.clist.append(l[1])
             conn.join(l[1])
@@ -182,7 +210,7 @@ class MarkovBot(SingleServerIRCBot):
             if m:
                 conn.privmsg(target, say_about(c, m.group(1)))
                 return
-            s = self.say(c).decode('utf-8')
+            s = self.say(c)
             conn.privmsg(target, s)
 
     def dump_db(self, outfile):
@@ -200,6 +228,14 @@ class MarkovBot(SingleServerIRCBot):
             learn(i[1], c)
             uc = self.get_chain(i[0])
             learn(i[1], uc)
+
+    def train_from_maker(self, gen, channel):
+        c = self.get_chain(channel)
+        for i in gen:
+            learn(i[1], c)
+            if i[0]:
+                uc = self.get_chain(i[0])
+                learn(i[1], uc)
 
     def on_action(self, conn, ev):
         message = ev.arguments[0]
@@ -225,7 +261,7 @@ def main():
         if sig != None:
             os._exit(1)
     if len(sys.argv) < 2:
-        print "Usage: {} <server[:port]> <nick> [<channel>]".format(sys.argv[0])
+        print("Usage: {} <server[:port]> <nick> [<channel>]".format(sys.argv[0]))
         sys.exit(1)
     if len(sys.argv) < 3:
         if os.path.exists(sys.argv[1]):
@@ -239,7 +275,7 @@ def main():
                 sigterm(None, None)
                 raise e
         else:
-            print "Usage: {} <server[:port]> <nick> [<channel>]".format(sys.argv[0])
+            print("Usage: {} <server[:port]> <nick> [<channel>]".format(sys.argv[0]))
             sys.exit(1)
     s = sys.argv[1].split(':', 1)
     server = s[0]
