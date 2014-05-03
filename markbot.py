@@ -139,6 +139,7 @@ class MarkovBot(SingleServerIRCBot):
     def __exit__(self, etype, exval, etb):
         if self.env is not None:
             self.env.close()
+        self.die('')
         return False
 
     def say(self, chain):
