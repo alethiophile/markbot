@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/python3.3
 
 # A bot that does Markov-chain training on everything it hears, then spits out
 # lines on command. Maintains separate chains for each channel it joins and each
@@ -108,7 +108,7 @@ def fold_string_indiscriminately(s, n=80):
     return '\n'.join([' '.join(i) for i in rv])
 
 class MarkovBot(SingleServerIRCBot):
-    def __init__(self, channel, nick, server, port=6667, clen=9, db=None):
+    def __init__(self, channel, nick, server, port=6667, clen=9, db=None, nspw=None):
         """Arguments are straightforward. Exception: if 'db' is not None, it signifies
         desire to use an LMDB database as backing storage instead of memory; its
         value should be a string containing the name of the database directory.
@@ -120,6 +120,7 @@ class MarkovBot(SingleServerIRCBot):
         else:
             self.clist = []
         self.clen = clen
+        self.nspw = nspw
         self.chains = {}
         self.mlen = 480
         if db is not None:
@@ -157,6 +158,8 @@ class MarkovBot(SingleServerIRCBot):
     def on_welcome(self, c, e):
         for i in self.clist:
             c.join(i)
+        if self.nspw:
+            c.privmsg("NickServ", "identify {}".format(self.nspw))
 
     def get_chain(self, arg):
         if not arg in self.chains:
@@ -328,6 +331,7 @@ def main():
     parser.add_argument("-t", "--train-file", help="Train database (faster than online)", default=None)
     parser.add_argument("-l", "--train-logs", action="store_true", help="Train a logs file", default=False)
     parser.add_argument("-r", "--train-chain", help="Chain to train into", default=None)
+    parser.add_argument("-w", "--password", help="Nickserv password", default=None)
     a = parser.parse_args()
 
     if a.train_file is not None:
@@ -343,7 +347,7 @@ def main():
             it = open(a.train_file, 'r')
         do_training(it, a.train_chain, a.database_file)
     else:
-        with MarkovBot(a.channel_join, a.nick, a.server, a.port, db=a.database_file) as bot:
+        with MarkovBot(a.channel_join, a.nick, a.server, a.port, db=a.database_file, nspw=a.password) as bot:
             bot.start()
 
 if __name__=="__main__":
